@@ -92,8 +92,10 @@ int dw_dphy_rx_probe(struct platform_device *pdev, unsigned int dphyglueiftester
 		return -ENOMEM;
 
 	drvdata = platform_get_drvdata(pdev);
-	dphy->base_address = drvdata->base + REG_DPHY_OFFSET;
     drvdata->dphy= dphy;
+
+    dphy->phy_id = drvdata->phy_id;
+	dphy->base_address = drvdata->base + REG_DPHY_OFFSET;
 	dphy->dphyglueiftester = dphyglueiftester;
 	dphy->sysreg_mipi_csi_ctrl = sysreg_mipi_csi_ctrl;
 
@@ -123,7 +125,7 @@ int dw_dphy_rx_probe(struct platform_device *pdev, unsigned int dphyglueiftester
 	dphy->lp_time = 1000; /* 1000 ns */
 	dphy->lanes_config = dw_dphy_setup_config(dphy);
 
-	dev_info(&dphy->phy->dev, "Probing dphy finished\n");
+	dev_vdbg(&dphy->phy->dev, "Probing dphy finished\n");
 
 	dw_dphy_create_capabilities_sysfs(pdev);
 
@@ -135,7 +137,7 @@ int dw_dphy_rx_remove(struct platform_device *pdev)
     struct bm_csi_drvdata *drvdata = platform_get_drvdata(pdev);
     struct dw_dphy_rx *dphy = drvdata->dphy;
 
-	dev_info(&dphy->phy->dev, "phy removed\n");
+	dev_vdbg(&dphy->phy->dev, "phy removed\n");
 
 	phy_reset(dphy->phy);
 	phy_unregister(&pdev->dev);

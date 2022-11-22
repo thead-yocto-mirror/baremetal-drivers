@@ -25,6 +25,7 @@
 #include <linux/videodev2.h>
 #include <linux/wait.h>
 #include <dw-mipi-csi-pltfrm.h>
+#include <bm_csi_ioctl.h>
 
 /* Advanced features */
 #define IPI_DT_OVERWRITE BIT(0)
@@ -144,6 +145,8 @@ struct interrupt_type {
 	u32 PKT;
 	u32 LINE;
 	u32 IPI;
+	u32 IPI2;
+	u32 IPI3;
 	u32 BNDRY_FRAME_FATAL;
 	u32 SEQ_FRAME_FATAL;
 	u32 CRC_FRAME_FATAL;
@@ -258,6 +261,7 @@ struct csi_data {
 };
 
 /* Structure to embed device driver information */
+
 struct dw_csi {
 	//struct v4l2_subdev sd;
 	//struct video_device vdev;
@@ -281,6 +285,8 @@ struct dw_csi {
 	u8 index;
 	u8 hw_version_major;
 	u16 hw_version_minor;
+    int has_error;
+    struct dw_csi_err_mask error_mask;
 };
 
 void dw_mipi_csi_reset(struct dw_csi *csi_dev);

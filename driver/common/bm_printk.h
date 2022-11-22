@@ -37,7 +37,7 @@
 #define bm_notice(fmt, ...) \
 	printk(KERN_NOTICE pr_fmt(fmt), ##__VA_ARGS__)
 #define bm_info(fmt, ...) \
-	printk(KERN_INFO pr_fmt(fmt), ##__VA_ARGS__)
+    printk(KERN_DEBUG   pr_fmt(fmt), ##__VA_ARGS__)
 #else
 #define bm_notice(fmt, ...)
 #define bm_info(fmt, ...)

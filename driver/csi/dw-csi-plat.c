@@ -114,13 +114,13 @@ dw_mipi_csi_try_format(uint32_t mbus_code)
 struct mipi_fmt *
 dw_mipi_csi_get_format(struct dw_csi *dev)
 {
-	dev_info(dev->dev,
+	dev_vdbg(dev->dev,
 		"%s got v4l2_mbus_pixelcode. 0x%x\n", __func__,
 		dev->fmt->mbus_code);
-	dev_info(dev->dev,
+	dev_vdbg(dev->dev,
 		"%s got width. 0x%x\n", __func__,
 		dev->fmt->width);
-	dev_info(dev->dev,
+	dev_vdbg(dev->dev,
 		"%s got height. 0x%x\n", __func__,
 		dev->fmt->height);
     return dev->fmt;
@@ -135,13 +135,13 @@ dw_mipi_csi_set_fmt(struct platform_device *pdev,
 
 	struct mipi_fmt *dev_fmt = NULL;
 	int i;
-	dev_info(dev->dev,
+	dev_vdbg(dev->dev,
 		"%s got mbus_pixelcode. 0x%x\n", __func__,
 		mbus_code);
 
 	dev_fmt = dw_mipi_csi_try_format(mbus_code);
 
-	dev_info(dev->dev,
+	dev_vdbg(dev->dev,
 		"%s got v4l2_mbus_pixelcode. 0x%x\n", __func__,
 		dev_fmt->mbus_code);
 	if (!dev_fmt)
@@ -153,7 +153,7 @@ dw_mipi_csi_set_fmt(struct platform_device *pdev,
         dev->fmt->height = height;
 		dw_mipi_csi_set_ipi_fmt(dev);
 	}
-	dev_info(dev->dev, "Width: %d, Height: %d of Demo\n", width, height);
+	dev_vdbg(dev->dev, "Width: %d, Height: %d of Demo\n", width, height);
 	if (width > 0 && height > 0) {
         dw_mipi_csi_fill_timings(dev, width, height);
 /*
@@ -170,7 +170,7 @@ dw_mipi_csi_set_fmt(struct platform_device *pdev,
 			 width,
 			 dev->hw.vactive,
 			 height);
-		dev_info(dev->dev,
+		dev_vdbg(dev->dev,
 			 "(core/demosaic) : width=%d/%d, height=%d/%d\n",
 			 dev->hw.htotal - (dev->hw.hbp
 					   + dev->hw.hsd
@@ -184,9 +184,9 @@ dw_mipi_csi_set_fmt(struct platform_device *pdev,
 		       __func__, width);
 		dev_vdbg(dev->dev, "%s unacceptable values 0x%x.\n",
 		       __func__, height);
-		dev_info(dev->dev, "%s unacceptable values 0x%x.\n",
+		dev_vdbg(dev->dev, "%s unacceptable values 0x%x.\n",
 		       __func__, width);
-		dev_info(dev->dev, "%s unacceptable values 0x%x.\n",
+		dev_vdbg(dev->dev, "%s unacceptable values 0x%x.\n",
 		       __func__, height);
 		return -EINVAL;
 	}
@@ -195,7 +195,7 @@ dw_mipi_csi_set_fmt(struct platform_device *pdev,
 		if (csi_dt[i].hex == dev->ipi_dt) {
 			dev_vdbg(dev->dev, "Using data type %s\n",
 				 csi_dt[i].name);
-			dev_info(dev->dev, "Using data type %s\n",
+			dev_vdbg(dev->dev, "Using data type %s\n",
 				 csi_dt[i].name);
 		}
 	return 0;
@@ -221,14 +221,14 @@ dw_mipi_csi_get_fmt(struct platform_device *pdev,
 
 int dw_mipi_csi_s_power(struct dw_csi *dev, int on)
 {
-	dev_info(dev->dev, "%s: on=%d\n", __func__, on);
+	dev_vdbg(dev->dev, "%s: on=%d\n", __func__, on);
 
 	if (on) {
         dw_dphy_power_on(dev->phy);
 		dw_mipi_csi_hw_stdby(dev);
 		dw_mipi_csi_start(dev);
 	} else {
-		phy_power_off(dev->phy);
+        dw_dphy_power_off(dev->phy);
 		dw_mipi_csi_mask_irq_power_off(dev);
 		/* reset data type */
 		dev->ipi_dt = 0x0;
@@ -272,11 +272,32 @@ static int dw_mipi_csi_init_cfg(struct v4l2_subdev *sd,
 }
 #endif
 
+unsigned csi_poll(struct file *file, struct poll_table_struct *wait)
+{
+    unsigned int mask = 0;
+	struct bm_csi_drvdata *drvdata = file->private_data;
+	struct dw_csi *csi_dev = &drvdata->csi_dev;
+    struct dw_csi_err_mask *err_mask = &csi_dev->error_mask;
+
+    poll_wait(file, &drvdata->irq_wait, wait);
+
+    if (csi_dev->has_error) {
+        csi_dev->has_error = 0;
+        mask |= POLLIN | POLLRDNORM;
+    }
+
+    return mask;
+}
+
+
 static irqreturn_t dw_mipi_csi_irq1(int irq, void *dev_id)
 {
-	struct dw_csi *csi_dev = dev_id;
+
+	struct bm_csi_drvdata *drvdata = dev_id;
+	struct dw_csi *csi_dev = &drvdata->csi_dev;
 
 	dw_mipi_csi_irq_handler(csi_dev);
+    wake_up_interruptible(&drvdata->irq_wait);
 
 	return IRQ_HANDLED;
 }
@@ -369,7 +390,7 @@ int dw_csi_probe(struct platform_device *pdev)
 
 	ret = devm_request_irq(dev, csi->ctrl_irq_number,
 			       dw_mipi_csi_irq1, IRQF_SHARED,
-			       dev_name(dev), csi);
+			       dev_name(dev), drvdata);
 	if (ret) {
 		dev_err(dev, "irq csi %d failed\n", pdata->id);
 		goto end;
@@ -387,6 +408,7 @@ int dw_csi_probe(struct platform_device *pdev)
 	csi->hw.ipi_mode = CAMERA_TIMING;
     csi->hw.ipi_color_mode = COLOR16;
 
+    init_waitqueue_head(&drvdata->irq_wait);
     //csi soc reset
     dw_csi_soc_reset();
 	dw_csi_create_capabilities_sysfs(pdev);
@@ -394,7 +416,7 @@ int dw_csi_probe(struct platform_device *pdev)
 	dw_mipi_csi_specific_mappings(csi);
 	dw_mipi_csi_mask_irq_power_off(csi);
 
-	dev_info(dev, "DW MIPI CSI-2 Host registered successfully HW v%u.%u\n",
+	dev_vdbg(dev, "DW MIPI CSI-2 Host registered successfully HW v%u.%u\n",
 		 csi->hw_version_major, csi->hw_version_minor);
 
 	ret = phy_reset(csi->phy);
@@ -421,7 +443,7 @@ int dw_csi_remove(struct platform_device *pdev)
 	//struct dw_csi *mipi_csi = &drvdata->csi_dev;
     //csi soc reset
     dw_csi_soc_reset();
-    dev_info(&pdev->dev, "DW MIPI CSI-2 Host module removed\n");
+    dev_vdbg(&pdev->dev, "DW MIPI CSI-2 Host module removed\n");
 
 	return 0;
 }

@@ -23,7 +23,10 @@ struct bm_csi_drvdata {
 	struct mutex mutex;
 	unsigned int device_idx;
 	void __iomem *base;
+    struct regmap *csia_reg;
+    struct regmap *visys_clk_reg;
 	void __iomem *reset;
+    phy_id_e phy_id;
     struct dw_dphy_rx *dphy;
     struct dw_csi csi_dev;
 	struct dw_csih_pdata csi_pdata;
@@ -35,6 +38,8 @@ struct bm_csi_drvdata {
 	struct clk *cfg_clk1;
 	struct clk *cfg_clk2;
 	struct platform_device *pdev;
+    uint32_t csi_power_on_sta;
+    wait_queue_head_t irq_wait;
 	void *private;	// can be bm_csi_drvdata_private, but not use now
 };
 
@@ -44,6 +49,7 @@ struct bm_csi_drvdata_private {
 
 int bm_csi_write_reg(struct bm_csi_drvdata *drvdata, void *__user args);
 int bm_csi_read_reg(struct bm_csi_drvdata *drvdata, void *__user args);
+int bm_csi_read_array(struct bm_csi_drvdata *drvdata, void *__user args);
 int bm_csi_init(struct bm_csi_drvdata *drvdata, void *__user args);
 int bm_csi_exit(struct bm_csi_drvdata *drvdata, void *__user args);
 int bm_csi_reset(struct bm_csi_drvdata *drvdata, void *__user args);
@@ -57,6 +63,7 @@ int bm_csi_set_pixclk(struct bm_csi_drvdata *drvdata, void *__user args);
 int bm_csi_get_pixclk(struct bm_csi_drvdata *drvdata, void *__user args);
 int bm_csi_set_stream(struct bm_csi_drvdata *drvdata, void *__user args);
 int bm_csi_get_stream(struct bm_csi_drvdata *drvdata, void *__user args);
+int bm_csi_get_error(struct bm_csi_drvdata *drvdata, void *__user args);
 int bm_csi_set_fmt(struct bm_csi_drvdata *drvdata, void *__user args);
 int bm_csi_get_fmt(struct bm_csi_drvdata *drvdata, void *__user args);
 int bm_csi_set_vc_select(struct bm_csi_drvdata *drvdata, void *__user args);

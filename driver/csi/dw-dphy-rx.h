@@ -145,6 +145,12 @@ enum glueiftester {
 };
 //#endif
 
+typedef enum {
+    MIPI_4LANE_PHY,
+    MIPI_A_PHY,
+    MIPI_B_PHY,
+} phy_id_e;
+
 /**
  * struct phy		specifies associated phy component
  * struct cfg		to pass mipi dphy specific configurations
@@ -167,6 +173,7 @@ struct dw_dphy_rx {
 	u32 lanes_config;
 	u32 dphy_freq;  //MBPS
 	u32 phy_type;
+    phy_id_e phy_id;    //csi2_phy, a phy, b phy
 	u32 dphy_gen;
 	u32 dphy_te_len;
 	u32 max_lanes;

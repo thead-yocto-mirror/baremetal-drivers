@@ -31,6 +31,7 @@
 #include <linux/interrupt.h>
 
 #include <linux/of.h>
+#include <linux/regmap.h>
 
 #include "bm_printk.h"
 #include "bm_csi_ioctl.h"
@@ -70,6 +71,24 @@ int bm_csi_read_reg(struct bm_csi_drvdata *drvdata, void *__user args)
 	return 0;
 }
 
+int bm_csi_read_array(struct bm_csi_drvdata *drvdata, void *__user args)
+{
+	int index = 0;
+	int cnt = 0;
+    uint32_t value = 0;
+    struct bm_csi_reg_arry_t array;
+
+	check_retval(copy_from_user(&array, args, sizeof(struct bm_csi_reg_arry_t)));
+    cnt = array.words;
+
+	for (index = 0; index < cnt; index++) {
+	    value = readl(drvdata->base + array.start_addr + index * 4);
+		check_retval(copy_to_user(&(array.buf[index]), &value, sizeof(value)));
+	}
+
+	return 0;
+}
+
 int bm_csi_reset(struct bm_csi_drvdata *drvdata, void *__user args)
 {
 	bm_info("%s: csi reset success\n", __func__);
@@ -79,36 +98,62 @@ int bm_csi_reset(struct bm_csi_drvdata *drvdata, void *__user args)
 	return 0;
 }
 
-static uint32_t csi_power_on_sta = 0;
-
 int bm_csi_en_power(struct bm_csi_drvdata *drvdata)
 {
 	bm_info("%s: csi set power\n", __func__);
-	csi_power_on_sta = 1;
-    dw_mipi_csi_s_power(&drvdata->csi_dev, csi_power_on_sta);
+	drvdata->csi_power_on_sta = 1;
+    dw_mipi_csi_s_power(&drvdata->csi_dev, drvdata->csi_power_on_sta);
 	return 0;
 }
 
 int bm_csi_dis_power(struct bm_csi_drvdata *drvdata)
 {
 	bm_info("%s: csi set power\n", __func__);
-	csi_power_on_sta = 0;
-    dw_mipi_csi_s_power(&drvdata->csi_dev, csi_power_on_sta);
+	drvdata->csi_power_on_sta = 0;
+    dw_mipi_csi_s_power(&drvdata->csi_dev, drvdata->csi_power_on_sta);
 	return 0;
+}
+
+static int bm_csi_can_enable(struct bm_csi_drvdata *drvdata)
+{
+    return 1;
+    u32 csia_pixclk = 0;
+    u32 csia_rst = 0;
+    u32 csia_shutdown = 0;
+
+    if (drvdata->csia_reg == NULL || drvdata->visys_clk_reg == NULL) {
+        return 1;
+    }
+
+    regmap_read(drvdata->visys_clk_reg, 0xa0, &csia_pixclk);
+    regmap_read(drvdata->csia_reg, 0x40 + R_CSI2_DPHY_RSTZ, &csia_rst);
+    regmap_read(drvdata->csia_reg, 0x40 + R_CSI2_DPHY_SHUTDOWNZ, &csia_shutdown);
+
+    if (csia_pixclk & (1 << 9) && (csia_rst | csia_shutdown)) {
+        return 0;
+    }
+
+    return 1;
 }
 
 int bm_csi_set_power(struct bm_csi_drvdata *drvdata, void *__user args)
 {
 	bm_info("%s: csi set power\n", __func__);
-	check_retval(copy_from_user(&csi_power_on_sta, args, sizeof(csi_power_on_sta)));
-    dw_mipi_csi_s_power(&drvdata->csi_dev, csi_power_on_sta);
+	check_retval(copy_from_user(&drvdata->csi_power_on_sta, args, sizeof(drvdata->csi_power_on_sta)));
+
+    if (!bm_csi_can_enable(drvdata)) {
+        printk("can't enable csi power!!!!!!!!!!!!!\n");
+        return -1;
+    }
+
+    dw_mipi_csi_s_power(&drvdata->csi_dev, drvdata->csi_power_on_sta);
 	return 0;
 }
 
 int bm_csi_get_power(struct bm_csi_drvdata *drvdata, void *__user args)
 {
 	bm_info("%s: csi get power\n", __func__);
-	check_retval(copy_to_user(args, &csi_power_on_sta, sizeof(csi_power_on_sta)));
+	check_retval(copy_to_user(args, &drvdata->csi_power_on_sta, sizeof(drvdata->csi_power_on_sta)));
 	return 0;
 }
 
@@ -146,6 +191,14 @@ int bm_csi_get_pixclk(struct bm_csi_drvdata *drvdata, void *__user args)
     return 0;
 }
 
+int bm_csi_get_error(struct bm_csi_drvdata *drvdata, void *__user args)
+{
+	bm_info("%s: \n", __func__);
+    struct dw_csi_err_mask *error_mask = &drvdata->csi_dev.error_mask;
+	check_retval(copy_to_user(args, error_mask, sizeof(struct dw_csi_err_mask)));
+    return 0;
+}
+
 int bm_csi_set_stream(struct bm_csi_drvdata *drvdata, void *__user args)
 {
 	bm_info("%s: \n", __func__);
@@ -155,7 +208,7 @@ int bm_csi_set_stream(struct bm_csi_drvdata *drvdata, void *__user args)
 int bm_csi_get_stream(struct bm_csi_drvdata *drvdata, void *__user args)
 {
 	bm_info("%s: \n", __func__);
-	check_retval(copy_to_user(args, &csi_power_on_sta, sizeof(csi_power_on_sta)));
+	check_retval(copy_to_user(args, &drvdata->csi_power_on_sta, sizeof(drvdata->csi_power_on_sta)));
 	return 0;
 }
 
@@ -209,13 +262,10 @@ int bm_csi_set_vc_select(struct bm_csi_drvdata *drvdata, void *__user args)
 	check_retval(copy_from_user(&vc, args, sizeof(vc)));
 
     if (vc.ipi_idx == 1) {
-        csi_dev->hw.ipi1_en = true;
         csi_dev->hw.virtual_ch = vc.vc_ch;
     } else if (vc.ipi_idx == 2) {
-        csi_dev->hw.ipi2_en = true;
         csi_dev->hw.ipi2_virtual_ch = vc.vc_ch;
     } else if (vc.ipi_idx == 3) {
-        csi_dev->hw.ipi3_en = true;
         csi_dev->hw.ipi3_virtual_ch = vc.vc_ch;
     }
 
@@ -227,6 +277,12 @@ int bm_csi_ipi_enable(struct bm_csi_drvdata *drvdata, void *__user args)
     int ipi_idx;
     struct dw_csi *csi_dev = &drvdata->csi_dev;
 	bm_info("%s: \n", __func__);
+
+    if (!bm_csi_can_enable(drvdata)) {
+        printk("can't enable csi ipi!!!!!!!!!!!!!\n");
+        return -1;
+    }
+
 	check_retval(copy_from_user(&ipi_idx, args, sizeof(ipi_idx)));
 
     if (ipi_idx == 1) {

@@ -44,11 +44,11 @@ static ssize_t dphy_freq_store(struct device *dev,
 		return ret;
 
 	if (freq > 2500) {
-		dev_info(dev, "Freq must be under 2500 Mhz\n");
+		dev_vdbg(dev, "Freq must be under 2500 Mhz\n");
 		return count;
 	}
 	if (freq < 80) {
-		dev_info(dev, "Freq must be over 80 Mhz\n");
+		dev_vdbg(dev, "Freq must be over 80 Mhz\n");
 		return count;
 	}
 

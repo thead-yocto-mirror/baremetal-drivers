@@ -75,7 +75,7 @@ struct interrupt_type csi_int = {
 };
 
 #define dw_print(VAR) \
-	dev_info(csi_dev->dev, "%s: 0x%x: %X\n", "##VAR##",\
+	dev_vdbg(csi_dev->dev, "%s: 0x%x: %X\n", "##VAR##",\
 	VAR, dw_mipi_csi_read(csi_dev, VAR))
 
 void dw_mipi_csi_write_part(struct dw_csi *dev, u32 address, u32 data,
@@ -151,11 +151,15 @@ int dw_mipi_csi_hw_stdby(struct dw_csi *csi_dev)
 		dw_mipi_csi_write(csi_dev, reg.MASK_INT_PHY_FATAL,
 				  GENMASK(8, 0));
 
-		dw_mipi_csi_write(csi_dev, reg.IPI2_MASK_INT_PHY_FATAL,
-				  GENMASK(8, 0));
+        if (csi_dev->hw.ipi2_en) {
+		    dw_mipi_csi_write(csi_dev, reg.IPI2_MASK_INT_PHY_FATAL,
+				    GENMASK(8, 0));
+        }
 
-		dw_mipi_csi_write(csi_dev, reg.IPI3_MASK_INT_PHY_FATAL,
-				  GENMASK(8, 0));
+        if (csi_dev->hw.ipi3_en) {
+		    dw_mipi_csi_write(csi_dev, reg.IPI3_MASK_INT_PHY_FATAL,
+				    GENMASK(8, 0));
+        }
 
 		dw_mipi_csi_write(csi_dev, reg.MASK_INT_PKT_FATAL,
 				  GENMASK(1, 0));
@@ -300,7 +304,7 @@ void dw_mipi_csi_set_ipi_fmt(struct dw_csi *csi_dev)
 		dw_mipi_csi_write(csi_dev, reg.IPI2_DATA_TYPE, csi_dev->ipi_dt);
 		dw_mipi_csi_write(csi_dev, reg.IPI3_DATA_TYPE, csi_dev->ipi_dt);
 	}
-	dev_info(dev, "Selected IPI Data Type 0x%X\n", csi_dev->ipi_dt);
+	dev_vdbg(dev, "Selected IPI Data Type 0x%X\n", csi_dev->ipi_dt);
 }
 
 void dw_mipi_csi_fill_timings(struct dw_csi *dev, uint32_t width, uint32_t height)
@@ -349,7 +353,7 @@ void dw_mipi_csi_start(struct dw_csi *csi_dev)
 	struct device *dev = csi_dev->dev;
 
 	dw_mipi_csi_write(csi_dev, reg.N_LANES, (csi_dev->hw.num_lanes - 1));
-	dev_info(dev, "number of lanes: %d\n", csi_dev->hw.num_lanes);
+	dev_vdbg(dev, "number of lanes: %d\n", csi_dev->hw.num_lanes);
 
 	/* IPI Related Configuration */
 	if (csi_dev->hw.output == IPI_OUT || csi_dev->hw.output == BOTH_OUT) {
@@ -545,28 +549,35 @@ int dw_mipi_csi_irq_handler(struct dw_csi *csi_dev)
 	struct device *dev = csi_dev->dev;
 	u32 global_int_status, i_sts;
 	unsigned long flags;
+    struct dw_csi_err_mask *err_mask = &csi_dev->error_mask;
 
+    csi_dev->has_error = 1;
 	spin_lock_irqsave(&csi_dev->slock, flags);
 	global_int_status = dw_mipi_csi_read(csi_dev, reg.INTERRUPT);
+    err_mask->src = global_int_status;
 
 	if (global_int_status & csi_int.PHY_FATAL) {
 		i_sts = dw_mipi_csi_read(csi_dev, reg.INT_PHY_FATAL);
-		dev_err_ratelimited(dev, "int %08X: PHY FATAL: %08X\n",
+        err_mask->ipi1_phy_fatal_mask = i_sts;
+		pr_err( "int %08X: PHY FATAL: %08X\n",
 				    reg.INT_PHY_FATAL, i_sts);
 
         i_sts = dw_mipi_csi_read(csi_dev, reg.IPI2_INT_PHY_FATAL);
-		dev_err_ratelimited(dev, "int %08X: IPI2 PHY FATAL: %08X\n",
+        err_mask->ipi2_phy_fatal_mask = i_sts;
+		pr_err( "int %08X: IPI2 PHY FATAL: %08X\n",
 				    reg.IPI2_INT_PHY_FATAL, i_sts);
 
         i_sts = dw_mipi_csi_read(csi_dev, reg.IPI3_INT_PHY_FATAL);
-		dev_err_ratelimited(dev, "int %08X: IPI2 PHY FATAL: %08X\n",
+        err_mask->ipi3_phy_fatal_mask = i_sts;
+		pr_err( "int %08X: IPI3 PHY FATAL: %08X\n",
 				    reg.IPI3_INT_PHY_FATAL, i_sts);
 
 	}
 
 	if (global_int_status & csi_int.PKT_FATAL) {
 		i_sts = dw_mipi_csi_read(csi_dev, reg.INT_PKT_FATAL);
-		dev_err_ratelimited(dev, "int %08X: PKT FATAL: %08X\n",
+        err_mask->pkt_fatal = i_sts;
+		pr_err( "int %08X: PKT FATAL: %08X\n",
 				    reg.INT_PKT_FATAL, i_sts);
 	}
 
@@ -574,13 +585,15 @@ int dw_mipi_csi_irq_handler(struct dw_csi *csi_dev)
 	    csi_dev->hw_version_major == 1 &&
 	    csi_dev->hw_version_minor == 30) {
 		i_sts = dw_mipi_csi_read(csi_dev, reg.INT_FRAME_FATAL);
-		dev_err_ratelimited(dev, "int %08X: FRAME FATAL: %08X\n",
+        err_mask->frame_fatal = i_sts;
+		pr_err( "int %08X: FRAME FATAL: %08X\n",
 				    reg.INT_FRAME_FATAL, i_sts);
 	}
 
 	if (global_int_status & csi_int.PHY) {
 		i_sts = dw_mipi_csi_read(csi_dev, reg.INT_PHY);
-		dev_err_ratelimited(dev, "int %08X: PHY: %08X\n",
+        err_mask->phy = i_sts;
+		pr_err( "int %08X: PHY: %08X\n",
 				    reg.INT_PHY, i_sts);
 	}
 
@@ -588,59 +601,81 @@ int dw_mipi_csi_irq_handler(struct dw_csi *csi_dev)
 	    csi_dev->hw_version_major == 1 &&
 	    csi_dev->hw_version_minor <= 30) {
 		i_sts = dw_mipi_csi_read(csi_dev, reg.INT_PKT);
-		dev_err_ratelimited(dev, "int %08X: PKT: %08X\n",
+		pr_err( "int %08X: PKT: %08X\n",
 				    reg.INT_PKT, i_sts);
 	}
 
 	if (global_int_status & csi_int.LINE) {
 		i_sts = dw_mipi_csi_read(csi_dev, reg.INT_LINE);
-		dev_err_ratelimited(dev, "int %08X: LINE: %08X\n",
+        err_mask->line = i_sts;
+		pr_err( "int %08X: LINE: %08X\n",
 				    reg.INT_LINE, i_sts);
 	}
 
 	if (global_int_status & csi_int.IPI) {
 		i_sts = dw_mipi_csi_read(csi_dev, reg.INT_IPI);
-		dev_err_ratelimited(dev, "int %08X: IPI: %08X\n",
+        err_mask->ipi = i_sts;
+		pr_err( "int %08X: IPI: %08X\n",
+				    reg.INT_IPI, i_sts);
+	}
+
+    if (global_int_status & csi_int.IPI2) {
+		i_sts = dw_mipi_csi_read(csi_dev, reg.IPI2_INT_PHY_FATAL);
+        err_mask->ipi2 = i_sts;
+		pr_err( "int %08X: IPI2: %08X\n",
+				    reg.IPI2_INT_PHY_FATAL, i_sts);
+	}
+
+    if (global_int_status & csi_int.IPI3) {
+		i_sts = dw_mipi_csi_read(csi_dev, reg.IPI2_INT_PHY_FATAL);
+        err_mask->ipi3 = i_sts;
+		pr_err( "int %08X: IPI3: %08X\n",
 				    reg.INT_IPI, i_sts);
 	}
 
 	if (global_int_status & csi_int.BNDRY_FRAME_FATAL) {
 		i_sts = dw_mipi_csi_read(csi_dev, reg.ST_BNDRY_FRAME_FATAL);
-		dev_err_ratelimited(dev,
+        err_mask->bndry_frame_fatal = i_sts;
+		pr_err(
 				    "int %08X: ST_BNDRY_FRAME_FATAL: %08X\n",
 				    reg.ST_BNDRY_FRAME_FATAL, i_sts);
 	}
 
 	if (global_int_status & csi_int.SEQ_FRAME_FATAL) {
 		i_sts = dw_mipi_csi_read(csi_dev, reg.ST_SEQ_FRAME_FATAL);
-		dev_err_ratelimited(dev,
+        err_mask->seq_frame_fatal = i_sts;
+		pr_err(
 				    "int %08X: ST_SEQ_FRAME_FATAL: %08X\n",
 				    reg.ST_SEQ_FRAME_FATAL, i_sts);
 	}
 
 	if (global_int_status & csi_int.CRC_FRAME_FATAL) {
 		i_sts = dw_mipi_csi_read(csi_dev, reg.ST_CRC_FRAME_FATAL);
-		dev_err_ratelimited(dev,
+        err_mask->crc_frame_fatal = i_sts;
+		pr_err(
 				    "int %08X: ST_CRC_FRAME_FATAL: %08X\n",
 				    reg.ST_CRC_FRAME_FATAL, i_sts);
 	}
 
 	if (global_int_status & csi_int.PLD_CRC_FATAL) {
 		i_sts = dw_mipi_csi_read(csi_dev, reg.ST_PLD_CRC_FATAL);
-		dev_err_ratelimited(dev,
+        err_mask->pld_crc_fatal = i_sts;
+		pr_err(
 				    "int %08X: ST_PLD_CRC_FATAL: %08X\n",
 				    reg.ST_PLD_CRC_FATAL, i_sts);
 	}
 
 	if (global_int_status & csi_int.DATA_ID) {
 		i_sts = dw_mipi_csi_read(csi_dev, reg.ST_DATA_ID);
-		dev_err_ratelimited(dev, "int %08X: ST_DATA_ID: %08X\n",
+        err_mask->data_id = i_sts;
+		pr_err( "int %08X: ST_DATA_ID: %08X\n",
 				    reg.ST_DATA_ID, i_sts);
 	}
 
 	if (global_int_status & csi_int.ECC_CORRECTED) {
 		i_sts = dw_mipi_csi_read(csi_dev, reg.ST_ECC_CORRECT);
-		dev_err_ratelimited(dev, "int %08X: ST_ECC_CORRECT: %08X\n",
+        err_mask->ecc_corrected = i_sts;
+		pr_err( "int %08X: ST_ECC_CORRECT: %08X\n",
 				    reg.ST_ECC_CORRECT, i_sts);
 	}
 
@@ -713,6 +748,8 @@ int dw_mipi_csi_specific_mappings(struct dw_csi *csi_dev)
 			/* interrupts map were changed */
 			csi_int.LINE = BIT(17);
 			csi_int.IPI = BIT(18);
+			csi_int.IPI2 = BIT(19);
+			csi_int.IPI3 = BIT(20);
 			csi_int.BNDRY_FRAME_FATAL = BIT(2);
 			csi_int.SEQ_FRAME_FATAL	= BIT(3);
 			csi_int.CRC_FRAME_FATAL = BIT(4);
@@ -721,10 +758,10 @@ int dw_mipi_csi_specific_mappings(struct dw_csi *csi_dev)
 			csi_int.ECC_CORRECTED = BIT(7);
 
 		} else {
-			dev_info(dev, "Version minor not supported.");
+			dev_vdbg(dev, "Version minor not supported.");
 		}
 	} else {
-		dev_info(dev, "Version major not supported.");
+		dev_vdbg(dev, "Version major not supported.");
 	}
 	return 0;
 }

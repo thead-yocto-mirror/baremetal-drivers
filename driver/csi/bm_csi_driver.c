@@ -32,6 +32,7 @@
 #include <linux/pm_runtime.h>
 
 #include <linux/of.h>
+#include <linux/mfd/syscon.h>
 
 #include "bm_printk.h"
 #include "bm_csi_ioctl.h"
@@ -52,9 +53,10 @@ static unsigned int device_register_index = 0;
 			return -EIO;\
 	} while (0)
 
-static unsigned int bm_csi_poll(struct file * filp, poll_table *wait)
+extern unsigned csi_poll(struct file *file, struct poll_table_struct *wait);
+static unsigned int bm_csi_poll(struct file * filp, struct poll_table_struct *wait)
 {
-	return 0;
+	return csi_poll(filp, wait);
 }
 
 void bm_csi_work(struct work_struct *work)
@@ -70,7 +72,7 @@ irqreturn_t bm_csi_irq(int irq, void *dev_id)
 static int bm_csi_runtime_suspend(struct device *dev)
 {
 	struct bm_csi_drvdata *pdriver_dev = dev_get_drvdata(dev);
-	dev_info(dev, "enter %s\n", __func__);
+	bm_info("enter %s\n", __func__);
 
     if (pdriver_dev->pclk != NULL) {
 	    clk_disable_unprepare(pdriver_dev->pclk);
@@ -99,7 +101,7 @@ static int bm_csi_runtime_resume(struct device *dev)
 {
 	int ret = 0;
 	struct bm_csi_drvdata *pdriver_dev = dev_get_drvdata(dev);
-	dev_info(dev, "enter %s\n", __func__);
+	bm_info("enter %s\n", __func__);
 
     if (pdriver_dev->pclk != NULL) {
 	    ret = clk_prepare_enable(pdriver_dev->pclk);
@@ -161,12 +163,19 @@ static int bm_csi_open(struct inode * inode, struct file * file)
     struct device *dev;
 
 	bm_info("enter %s\n",  __func__);
-	dev_info(dev, "open mipi-csi dev\n");
+	bm_info("open mipi-csi dev\n");
 
 	drvdata = container_of(inode->i_cdev, struct bm_csi_drvdata, cdev);
 	file->private_data = drvdata;
     dev = &drvdata->pdev->dev;
-	dev_info(dev, "open mipi-csi dev\n");
+    drvdata->csi_power_on_sta = 0;
+    memset(&drvdata->csi_dev.hw, 0, sizeof(drvdata->csi_dev.hw));
+	drvdata->csi_dev.hw.ipi_mode = CAMERA_TIMING;
+    drvdata->csi_dev.hw.ipi_color_mode = COLOR16;
+
+    memset(&drvdata->csi_dev.error_mask, 0, sizeof(drvdata->csi_dev.error_mask));
+
+	bm_info("open mipi-csi dev\n");
     if (pm_runtime_get_sync(dev)) {
 		ret = bm_csi_runtime_resume(dev);
 		if (ret)
@@ -196,6 +205,9 @@ static long bm_csi_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case BMCSI_IOC_READ_REG:
 		ret = bm_csi_read_reg(drvdata, (void *)arg);
 		break;
+	case BMCSI_IOC_READ_ARRAY:
+        ret = bm_csi_read_array(drvdata, (void *)arg);
+        break;
     case BMCSI_IOC_S_RESET:
         ret = bm_csi_reset(drvdata, (void *)arg);
 		break;
@@ -253,6 +265,9 @@ static long bm_csi_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
     case BMCSI_IOC_GET_PIXCLK:
         ret = bm_csi_get_pixclk(drvdata, (void *)arg);
 		break;
+    case BMCSI_IOC_GET_ERROR:
+        ret = bm_csi_get_error(drvdata, (void *)arg);
+		break;
     case BMCSI_IOC_MAX:
 		break;
 	default:
@@ -275,7 +290,7 @@ static int bm_csi_release(struct inode * inode, struct file * file)
 	drvdata = container_of(inode->i_cdev, struct bm_csi_drvdata, cdev);
 	file->private_data = drvdata;
     dev = &drvdata->pdev->dev;
-	dev_info(dev, "release mipi-csi dev\n");
+	bm_info("release mipi-csi dev\n");
     ret = bm_csi_dis_power(drvdata);
     if (ret) {
 		pr_info("fail to disable csi power, %s %d\n", __func__, __LINE__);
@@ -311,6 +326,7 @@ static int bm_csi_probe(struct platform_device *pdev)
 	struct resource *iores_mem;
     unsigned int dphyglueiftester= 0;
     unsigned int sysreg_mipi_csi_ctrl = 0;
+    struct device_node *np = pdev->dev.of_node;
 	u32 value;
 
 	bm_info("enter %s\n", __func__);
@@ -326,10 +342,42 @@ static int bm_csi_probe(struct platform_device *pdev)
 		return  -ENOMEM;
 	}
 
+    memset(drvdata, 0, sizeof(*drvdata));
+
 	iores_mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	drvdata->base = devm_ioremap_resource(&pdev->dev, iores_mem);
+
 	bm_info("%s: [%s%d]: drvdata->base=0x%px, phy_addr base=0x%llx\n", __func__,
 		BM_DRIVER_NAME, pdev->id, drvdata->base, iores_mem->start);
+
+    /*
+    if (iores_mem->start == 0xffe4010000) {
+        drvdata->visys_clk_reg = syscon_regmap_lookup_by_phandle(np, "visys-regmap");
+        if (IS_ERR(drvdata->visys_clk_reg)) {
+            drvdata->visys_clk_reg = NULL;
+            dev_err(&pdev->dev, "cannot find regmap for visys clk register\n");
+        }
+
+        drvdata->csia_reg = syscon_regmap_lookup_by_phandle(np, "csia-regmap");
+        if (IS_ERR(drvdata->csia_reg)) {
+            drvdata->csia_reg = NULL;
+            dev_err(&pdev->dev, "cannot find regmap for csia register\n");
+        }
+    }
+    */
+
+    const char *phy_name;
+    ret = of_property_read_string(np, "phy_name", &phy_name);
+    if (strcmp(phy_name, "CSI_B") == 0) {
+	    bm_info("mipi is b phy\n");
+        drvdata->phy_id = MIPI_B_PHY;
+    } else if(strcmp(phy_name, "CSI_A") == 0) {
+	    bm_info("mipi is a phy\n");
+        drvdata->phy_id = MIPI_A_PHY;
+    } else if(strcmp(phy_name, "CSI_4LANE") == 0) {
+	    bm_info("mipi is 4lane phy\n");
+        drvdata->phy_id = MIPI_4LANE_PHY;
+    }
 
 	drvdata->reset = NULL;
 	drvdata->device_idx = pdev->id;
@@ -420,16 +468,16 @@ static int bm_csi_probe(struct platform_device *pdev)
     device_property_read_u32(&pdev->dev, "sysreg_mipi_csi_ctrl", &sysreg_mipi_csi_ctrl);
 	bm_info("sysreg_mipi_csi_ctrl is:0x%x\n", sysreg_mipi_csi_ctrl);
 
-    dw_dphy_rx_probe(pdev, dphyglueiftester, sysreg_mipi_csi_ctrl);
-    dw_csi_probe(pdev);
-
     pm_runtime_enable(&pdev->dev);
-	ret = bm_csi_runtime_resume(&pdev->dev);
+    ret = pm_runtime_get_sync(&pdev->dev);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "fail to resume csi\n");
 	}
 
-	ret = bm_csi_runtime_suspend(&pdev->dev);
+    dw_dphy_rx_probe(pdev, dphyglueiftester, sysreg_mipi_csi_ctrl);
+    dw_csi_probe(pdev);
+
+    ret = pm_runtime_put_sync(&pdev->dev);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "fail to suspend csi\n");
 	}

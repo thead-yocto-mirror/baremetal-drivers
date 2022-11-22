@@ -46,7 +46,7 @@ static ssize_t n_lanes_store(struct device *dev, struct device_attribute *attr,
 		return count;
 	}
 
-	dev_info(dev, "Lanes %lu\n", lanes);
+	dev_vdbg(dev, "Lanes %lu\n", lanes);
 	csi_dev->hw.num_lanes = lanes;
 
 	return count;
@@ -81,7 +81,7 @@ static ssize_t width_store(struct device *dev, struct device_attribute *attr,
 	if (ret < 0)
 		return ret;
 
-	dev_info(dev, "width %lu\n", width);
+	dev_vdbg(dev, "width %lu\n", width);
 	csi_dev->hw.htotal = width;
 
 	return count;
@@ -116,7 +116,7 @@ static ssize_t height_store(struct device *dev, struct device_attribute *attr,
 	if (ret < 0)
 		return ret;
 
-	dev_info(dev, "hight %lu\n", height);
+	dev_vdbg(dev, "hight %lu\n", height);
 	csi_dev->hw.vactive = height;
 
 	return count;
@@ -178,7 +178,7 @@ static ssize_t data_type_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "Data type 0x%lx\n", dt);
+	dev_vdbg(dev, "Data type 0x%lx\n", dt);
 	csi_dev->ipi_dt = dt;
 
     dw_mipi_csi_set_ipi_fmt(csi_dev);
@@ -222,7 +222,7 @@ static ssize_t hsa_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "HSA time 0x%lx\n", hsa);
+	dev_vdbg(dev, "HSA time 0x%lx\n", hsa);
 	csi_dev->hw.hsa = hsa;
 
 	return count;
@@ -263,7 +263,7 @@ static ssize_t hbp_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "HBP time 0x%lx\n", hbp);
+	dev_vdbg(dev, "HBP time 0x%lx\n", hbp);
 	csi_dev->hw.hbp = hbp;
 
 	return count;
@@ -304,7 +304,7 @@ static ssize_t hsd_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "HSD time 0x%lx\n", hsd);
+	dev_vdbg(dev, "HSD time 0x%lx\n", hsd);
 	csi_dev->hw.hsd = hsd;
 
 	return count;
@@ -345,7 +345,7 @@ static ssize_t ipi2_hsa_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "HSA time 0x%lx\n", hsa);
+	dev_vdbg(dev, "HSA time 0x%lx\n", hsa);
 	csi_dev->hw.ipi2_hsa = hsa;
 
 	return count;
@@ -386,7 +386,7 @@ static ssize_t ipi2_hbp_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "HBP time 0x%lx\n", hbp);
+	dev_vdbg(dev, "HBP time 0x%lx\n", hbp);
 	csi_dev->hw.ipi2_hbp = hbp;
 
 	return count;
@@ -427,7 +427,7 @@ static ssize_t ipi2_hsd_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "HSD time 0x%lx\n", hsd);
+	dev_vdbg(dev, "HSD time 0x%lx\n", hsd);
 	csi_dev->hw.ipi2_hsd = hsd;
 
 	return count;
@@ -468,7 +468,7 @@ static ssize_t ipi3_hsa_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "HSA time 0x%lx\n", hsa);
+	dev_vdbg(dev, "HSA time 0x%lx\n", hsa);
 	csi_dev->hw.ipi3_hsa = hsa;
 
 	return count;
@@ -509,7 +509,7 @@ static ssize_t ipi3_hbp_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "HBP time 0x%lx\n", hbp);
+	dev_vdbg(dev, "HBP time 0x%lx\n", hbp);
 	csi_dev->hw.ipi3_hbp = hbp;
 
 	return count;
@@ -550,7 +550,7 @@ static ssize_t ipi3_hsd_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "HSD time 0x%lx\n", hsd);
+	dev_vdbg(dev, "HSD time 0x%lx\n", hsd);
 	csi_dev->hw.ipi3_hsd = hsd;
 
 	return count;
@@ -591,7 +591,7 @@ static ssize_t vsa_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "VSA period 0x%lx\n", vsa);
+	dev_vdbg(dev, "VSA period 0x%lx\n", vsa);
 	csi_dev->hw.vsa = vsa;
 
 	return count;
@@ -632,7 +632,7 @@ static ssize_t vbp_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "VBP period 0x%lx\n", vbp);
+	dev_vdbg(dev, "VBP period 0x%lx\n", vbp);
 	csi_dev->hw.vbp = vbp;
 
 	return count;
@@ -673,7 +673,7 @@ static ssize_t vfp_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "VFP period 0x%lx\n", vfp);
+	dev_vdbg(dev, "VFP period 0x%lx\n", vfp);
 	csi_dev->hw.vfp = vfp;
 
 	return count;
@@ -709,7 +709,7 @@ static ssize_t ipi_enable_mask_store(struct device *dev,
 	if (ret < 0)
 		return ret;
 
-	dev_info(dev, "enable_mask 0x%lx\n", enable_mask);
+	dev_vdbg(dev, "enable_mask 0x%lx\n", enable_mask);
 
     if (enable_mask & 1) {
 	    csi_dev->hw.ipi1_en = true;
@@ -783,7 +783,7 @@ static ssize_t virtual_channel_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "Virtual Channel %lu\n", virtual_ch);
+	dev_vdbg(dev, "Virtual Channel %lu\n", virtual_ch);
 	csi_dev->hw.virtual_ch = virtual_ch;
 
 	return count;
@@ -824,7 +824,7 @@ static ssize_t ipi2_virtual_channel_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "Virtual Channel %lu\n", virtual_ch);
+	dev_vdbg(dev, "Virtual Channel %lu\n", virtual_ch);
 	csi_dev->hw.ipi2_virtual_ch = virtual_ch;
 
 	return count;
@@ -865,7 +865,7 @@ static ssize_t ipi3_virtual_channel_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "Virtual Channel %lu\n", virtual_ch);
+	dev_vdbg(dev, "Virtual Channel %lu\n", virtual_ch);
 	csi_dev->hw.ipi3_virtual_ch = virtual_ch;
 
 	return count;
@@ -908,7 +908,7 @@ static ssize_t ipi_color_mode_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "IPI Color mode %lu\n", ipi_color_mode);
+	dev_vdbg(dev, "IPI Color mode %lu\n", ipi_color_mode);
 	csi_dev->hw.ipi_color_mode = ipi_color_mode;
 
 	return count;
@@ -951,7 +951,7 @@ static ssize_t ipi_auto_flush_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "IPI Auto Flush %lu\n", ipi_auto_flush);
+	dev_vdbg(dev, "IPI Auto Flush %lu\n", ipi_auto_flush);
 	csi_dev->hw.ipi_auto_flush = ipi_auto_flush;
 
 	return count;
@@ -994,7 +994,7 @@ static ssize_t ipi_timings_mode_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "IPI Color mode %lu\n", ipi_mode);
+	dev_vdbg(dev, "IPI Color mode %lu\n", ipi_mode);
 	csi_dev->hw.ipi_mode = ipi_mode;
 
 	return count;
@@ -1038,7 +1038,7 @@ static ssize_t output_type_store(struct device *dev,
 		return count;
 	}
 
-	dev_info(dev, "IPI Color mode %lu\n", output);
+	dev_vdbg(dev, "IPI Color mode %lu\n", output);
 	csi_dev->hw.output = output;
 
 	return count;

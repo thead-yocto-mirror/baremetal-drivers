@@ -439,6 +439,14 @@ static int dw_dphy_gen3_12bit_configure(struct dw_dphy_rx *dphy, int abphy_flag)
 
 	dw_dphy_write(dphy, R_CSI2_DPHY_RSTZ, 0);
 	dw_dphy_write(dphy, R_CSI2_DPHY_SHUTDOWNZ, 0);
+
+
+    if (dphy->phy_id == MIPI_A_PHY) {
+        reg_val = dw_dphy_te_read(dphy, RX_RX_CLKLANE_LANE_6);
+        reg_val &= ~(3 << 4);
+	    dw_dphy_te_write(dphy, RX_RX_CLKLANE_LANE_6, reg_val);
+    }
+
 	dw_dphy_write_msk(dphy, R_CSI2_DPHY_TST_CTRL0, 1, PHY_TESTCLR, 1);
     udelay(1);
 	dw_dphy_write_msk(dphy, R_CSI2_DPHY_TST_CTRL0, 0, PHY_TESTCLR, 1);
@@ -544,6 +552,12 @@ static int dw_dphy_gen3_12bit_configure(struct dw_dphy_rx *dphy, int abphy_flag)
 		reg_val = dw_dphy_te_read(dphy, RX_SYS_7);
         reg_val |= (1 << 5);
 		dw_dphy_te_write(dphy, RX_SYS_7, reg_val);
+    }
+
+    if (dphy->phy_id == MIPI_A_PHY) {
+        reg_val = dw_dphy_te_read(dphy, RX_RX_CLKLANE_LANE_6);
+        reg_val |= (1 << 5);
+	    dw_dphy_te_write(dphy, RX_RX_CLKLANE_LANE_6, reg_val);
     }
 
 	dw_dphy_write(dphy, R_CSI2_DPHY_RSTZ, 1);
@@ -926,7 +940,7 @@ static int dw_dphy_set_phy_state(struct dw_dphy_rx *dphy, u32 on)
 
 	if (on) {
 		dw_dphy_configure(dphy);
-		dev_info(&dphy->phy->dev,
+		dev_vdbg(&dphy->phy->dev,
 			 "HS Code: 0X%x\n", dw_dphy_te_read(dphy, hs_freq));
 	} else {
 		dw_dphy_write(dphy, R_CSI2_DPHY_SHUTDOWNZ, 0);
@@ -940,7 +954,7 @@ int dw_dphy_power_on(struct phy *phy)
 {
 	struct dw_dphy_rx *dphy = phy_get_drvdata(phy);
 
-	dev_info(&dphy->phy->dev, "DPHY Power ON\n");
+	dev_vdbg(&dphy->phy->dev, "DPHY Power ON\n");
     bm_info("enter %s\n", __func__);
 
     dphy->phy_type = 1;
