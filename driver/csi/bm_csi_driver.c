@@ -82,16 +82,9 @@ static int bm_csi_runtime_suspend(struct device *dev)
 	    clk_disable_unprepare(pdriver_dev->pixclk);
     }
 
-    if (pdriver_dev->cfg_clk0!= NULL) {
-	    clk_disable_unprepare(pdriver_dev->cfg_clk0);
-    }
-
-    if (pdriver_dev->cfg_clk1!= NULL) {
-	    clk_disable_unprepare(pdriver_dev->cfg_clk1);
-    }
-
-    if (pdriver_dev->cfg_clk2!= NULL) {
-	    clk_disable_unprepare(pdriver_dev->cfg_clk2);
+    if (pdriver_dev->cfg_clk!= NULL) {
+	    clk_disable_unprepare(pdriver_dev->cfg_clk);
+        pr_info("%s, %d, cfg clk disable\n", __func__, __LINE__);
     }
 
 	pr_info("exit %s\n", __func__);
@@ -106,7 +99,7 @@ static int bm_csi_runtime_resume(struct device *dev)
     if (pdriver_dev->pclk != NULL) {
 	    ret = clk_prepare_enable(pdriver_dev->pclk);
 	    if (ret < 0) {
-	    	dev_err(dev, "could not prepare or enable csi pclk\n");
+	    	pr_err("could not prepare or enable csi pclk\n");
 	    	clk_disable_unprepare(pdriver_dev->pclk);
             return -1;
 	    }
@@ -115,35 +108,18 @@ static int bm_csi_runtime_resume(struct device *dev)
     if (pdriver_dev->pixclk!= NULL) {
 	    ret = clk_prepare_enable(pdriver_dev->pixclk);
 	    if (ret < 0) {
-	    	dev_err(dev, "could not prepare or enable  pixclk\n");
+	    	pr_err("could not prepare or enable  pixclk\n");
 	    	clk_disable_unprepare(pdriver_dev->pixclk);
             return -1;
 	    }
     }
 
-    if (pdriver_dev->cfg_clk0 != NULL) {
-	    ret = clk_prepare_enable(pdriver_dev->cfg_clk0);
+    if (pdriver_dev->cfg_clk != NULL) {
+	    ret = clk_prepare_enable(pdriver_dev->cfg_clk);
+        pr_info("%s, %d, cfg clk enable\n", __func__, __LINE__);
 	    if (ret < 0) {
-	    	dev_err(dev, "could not prepare or enable cfg_clk0\n");
-	    	clk_disable_unprepare(pdriver_dev->cfg_clk0);
-            return -1;
-	    }
-    }
-
-    if (pdriver_dev->cfg_clk1 != NULL) {
-	    ret = clk_prepare_enable(pdriver_dev->cfg_clk1);
-	    if (ret < 0) {
-	    	dev_err(dev, "could not prepare or enable cfg_clk1\n");
-	    	clk_disable_unprepare(pdriver_dev->cfg_clk1);
-            return -1;
-	    }
-    }
-
-    if (pdriver_dev->cfg_clk2 != NULL) {
-	    ret = clk_prepare_enable(pdriver_dev->cfg_clk2);
-	    if (ret < 0) {
-	    	dev_err(dev, "could not prepare or enable cfg_clk2\n");
-	    	clk_disable_unprepare(pdriver_dev->cfg_clk2);
+	    	pr_err("could not prepare or enable cfg_clk\n");
+	    	clk_disable_unprepare(pdriver_dev->cfg_clk);
             return -1;
 	    }
     }
@@ -175,11 +151,17 @@ static int bm_csi_open(struct inode * inode, struct file * file)
 
     memset(&drvdata->csi_dev.error_mask, 0, sizeof(drvdata->csi_dev.error_mask));
 
+    pr_info("%s, %d, drvdata = %p\n", __func__, __LINE__, drvdata);
+    pr_info("%s, %d, dev = %p\n", __func__, __LINE__, dev);
+
 	bm_info("open mipi-csi dev\n");
-    if (pm_runtime_get_sync(dev)) {
+    ret = pm_runtime_get_sync(dev);
+    if (ret) {
+	    pr_err("%s, %d runtime get sync err, %d\n", __func__, __LINE__, ret);
 		ret = bm_csi_runtime_resume(dev);
-		if (ret)
+		if (ret) {
 			pr_err("fail to resume csi %s %d\n", __func__, __LINE__);
+        }
 	}
 
 	return 0;
@@ -287,8 +269,7 @@ static int bm_csi_release(struct inode * inode, struct file * file)
 
 	bm_info("enter %s\n", __func__);
 
-	drvdata = container_of(inode->i_cdev, struct bm_csi_drvdata, cdev);
-	file->private_data = drvdata;
+	drvdata = file->private_data;
     dev = &drvdata->pdev->dev;
 	bm_info("release mipi-csi dev\n");
     ret = bm_csi_dis_power(drvdata);
@@ -298,7 +279,8 @@ static int bm_csi_release(struct inode * inode, struct file * file)
 
     ret = pm_runtime_put_sync(dev);
 	if (ret) {
-		pr_info("fail to resume csi %s %d\n", __func__, __LINE__);
+		pr_err("%s %d, fail to resume csi, %d\n", __func__, __LINE__, ret);
+        bm_csi_runtime_suspend(dev);
 	}
 
 	return 0;
@@ -400,25 +382,15 @@ static int bm_csi_probe(struct platform_device *pdev)
         drvdata->pixclk = NULL;
 	}
 
-	drvdata->cfg_clk0 = devm_clk_get(&pdev->dev, "cfg_clk0");
-	if (IS_ERR(drvdata->cfg_clk0)) {
-		dev_err(&pdev->dev, "failed to get cfg_clk0");
-        drvdata->cfg_clk0 = NULL;
+	drvdata->cfg_clk = devm_clk_get(&pdev->dev, "cfg_clk");
+	if (IS_ERR(drvdata->cfg_clk)) {
+		dev_err(&pdev->dev, "failed to get cfg_clk");
+        drvdata->cfg_clk = NULL;
 	}
 
-    drvdata->cfg_clk1 = devm_clk_get(&pdev->dev, "cfg_clk1");
-	if (IS_ERR(drvdata->cfg_clk1)) {
-		dev_err(&pdev->dev, "failed to get cfg_clk1");
-        drvdata->cfg_clk1 = NULL;
-	}
-
-    drvdata->cfg_clk2 = devm_clk_get(&pdev->dev, "cfg_clk2");
-	if (IS_ERR(drvdata->cfg_clk2)) {
-		dev_err(&pdev->dev, "failed to get cfg_clk2");
-        drvdata->cfg_clk2 = NULL;
-	}
-
+    pr_info("%s, %d, drvdata = %p\n", __func__, __LINE__, drvdata);
 	platform_set_drvdata(pdev, drvdata);
+    pr_info("%s, %d, dev = %p\n", __func__, __LINE__, &pdev->dev);
 
 	if (pdev->id == 0) {
 		if (bm_driver_major == 0) {
@@ -471,7 +443,7 @@ static int bm_csi_probe(struct platform_device *pdev)
     pm_runtime_enable(&pdev->dev);
     ret = pm_runtime_get_sync(&pdev->dev);
 	if (ret < 0) {
-		dev_err(&pdev->dev, "fail to resume csi\n");
+		pr_err("%s, %d, fail to resume csi, %d\n", __func__, __LINE__, ret);
 	}
 
     dw_dphy_rx_probe(pdev, dphyglueiftester, sysreg_mipi_csi_ctrl);
@@ -479,7 +451,7 @@ static int bm_csi_probe(struct platform_device *pdev)
 
     ret = pm_runtime_put_sync(&pdev->dev);
 	if (ret < 0) {
-		dev_err(&pdev->dev, "fail to suspend csi\n");
+		pr_err("%s, %d, fail to suspend csi, %d\n", __func__, __LINE__, ret);
 	}
 
 	device_register_index++;

@@ -34,9 +34,7 @@ struct bm_csi_drvdata {
 	int irq_num;
 	struct clk *pclk;
     struct clk *pixclk;
-	struct clk *cfg_clk0;
-	struct clk *cfg_clk1;
-	struct clk *cfg_clk2;
+	struct clk *cfg_clk;
 	struct platform_device *pdev;
     uint32_t csi_power_on_sta;
     wait_queue_head_t irq_wait;
